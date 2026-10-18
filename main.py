@@ -200,6 +200,11 @@ def precompute(orders: list, rates: dict) -> dict:
         region_product_revenue[key] += usd(o)
         region_product_qty[key] += o["qty"]
 
+    # ---- Distinct customers per product (paid only) ----
+    distinct_customers_by_product: dict[str, set] = defaultdict(set)
+    for o in paid:
+        distinct_customers_by_product[o["product"]].add(o["customer"])
+
     # ---- Sorted product list for NLP matching (longest first to avoid prefix errors) ----
     all_products = sorted(product_revenue.keys(), key=len, reverse=True)
 
@@ -222,6 +227,7 @@ def precompute(orders: list, rates: dict) -> dict:
         "month_product_qty": dict(month_product_qty),
         "region_product_revenue": dict(region_product_revenue),
         "region_product_qty": dict(region_product_qty),
+        "distinct_customers_by_product": {k: v for k, v in distinct_customers_by_product.items()},
         "all_products": all_products,
         "paid_orders": paid,
         "refunded_orders": refunded,
@@ -417,6 +423,13 @@ def answer_question(request: QuestionRequest):
                 best = max(scores, key=scores.get)
                 return {"answer": f"{best}: {fmt_usd(scores[best])}"}
             return {"answer": "No paid sales found."}
+
+    is_distinct_customers = "distinct" in q and "customer" in q
+
+    # 4a. Distinct customers who bought a product
+    if is_distinct_customers and product:
+        count = len(agg["distinct_customers_by_product"].get(product, set()))
+        return {"answer": str(count)}
 
     # 4. Product qty sold (with optional date/region filter)
     if is_product_count and product:
